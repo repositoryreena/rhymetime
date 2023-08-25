@@ -2,7 +2,7 @@ const poemContainer = document.getElementById('poem');
 const generateButton = document.getElementById('generateLine');
 const userInput = document.getElementById('userInput');
 
-const usedLastWords = [];
+const usedLastWords = new Set();
 
 generateButton.addEventListener('click', generateLine);
 
@@ -14,24 +14,29 @@ async function generateLine() {
     }
 
     const userLastWord = userLine.split(' ').pop();
-    const previousLastWord = usedLastWords[usedLastWords.length - 1];
+    const previousLastWord = Array.from(usedLastWords).pop(); // Get the last word from the Set
 
     if (previousLastWord && !(await checkRhyme(userLastWord, previousLastWord))) {
         alert("Your line doesn't rhyme with the previous line.");
         return;
     }
 
+    if (usedLastWords.has(userLastWord)) {
+        alert("No repeating last words allowed.");
+        return;
+    }
+
     // You write a line
     addLineToPoem(userLine);
-    usedLastWords.push(userLastWord);
+    usedLastWords.add(userLastWord);
 
     // Computer generates a line
-    let computerLine = await generateComputerLineRecursively();
-    while (usedLastWords.includes(computerLine.split(' ').pop())) {
-        computerLine = await generateComputerLineRecursively();
+    let computerLine = await generateComputerLineRecursively(userLastWord);
+    while (usedLastWords.has(computerLine.split(' ').pop())) {
+        computerLine = await generateComputerLineRecursively(userLastWord);
     }
+    usedLastWords.add(computerLine.split(' ').pop());
     addLineToPoem(computerLine);
-    usedLastWords.push(computerLine.split(' ').pop());
 
     userInput.value = "";
 }
@@ -39,7 +44,7 @@ async function generateLine() {
 async function checkRhyme(word1, word2) {
     const response = await fetch(`https://api.datamuse.com/words?rel_rhy=${word1}`);
     const data = await response.json();
-    return data.some(entry => entry.word === word2);
+    return data.some(entry => entry.word === word2.toLowerCase());
 }
 
 async function fetchRhyme(word) {
@@ -49,23 +54,35 @@ async function fetchRhyme(word) {
     return rhymeWords[Math.floor(Math.random() * rhymeWords.length)];
 }
 
-async function generateComputerLineRecursively() {
+async function generateComputerLineRecursively(lastWord) {
     let line = '';
+    let currentWord = lastWord;
 
-    while (countWords(line) < 5 || countWords(line) > 10) {
-        const rhymeWord = await fetchRhyme(usedLastWords[usedLastWords.length - 1]);
-        if (!rhymeWord) {
-            continue;
-        }
+    while (countWords(line) < 5 || countWords(line) > 10 || usedLastWords.has(currentWord)) {
+        const rhymeWord = await fetchRhyme(currentWord);
 
         if (line) {
             line += ' ';
         }
         line += rhymeWord;
+        currentWord = rhymeWord;
     }
 
     return line.trim() || "Couldn't find a rhyme for the computer's line.";
 }
+
+function countWords(sentence) {
+    return sentence.split(' ').length;
+}
+
+function addLineToPoem(line) {
+    const lineElement = document.createElement('div');
+    lineElement.classList.add('poem-line');
+    lineElement.textContent = line;
+    poemContainer.appendChild(lineElement);
+}
+
+
 
 function countWords(sentence) {
     return sentence.split(' ').length;
